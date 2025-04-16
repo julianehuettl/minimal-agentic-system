@@ -162,4 +162,61 @@ Verwende stets die passenden Werkzeuge für die jeweilige Aufgabe und erkläre d
                         console.log("[DEBUG] Resuming readline and enabling input due to turn_complete.");
                         rl.resume();
                         if (!currentError && assistantMessageContent.trim() && !finalContentProcessed) {
-                            co
+                            const assistantMessage = createAssistantMessage(assistantMessageContent);
+                            messages.push(assistantMessage);
+                            finalContentProcessed = true;
+                            console.log("[DEBUG] Assistant message added to history (turn_complete fallback).");
+                        }
+                        isAwaitingUserInput = true;
+                        rl.prompt();
+                        break;
+                }
+            }
+
+            if (currentError && !controller.signal.aborted) {
+                console.log("\n[Runde wegen Stream-Fehler beendet]");
+                rl.resume();
+                rl.prompt();
+            }
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                console.log('\n[Anfrage vom Benutzer abgebrochen]');
+            } else {
+                console.error(`\n❌ Externer Fehler: ${error.message}`);
+                console.error(error.stack);
+                rl.resume();
+                isAwaitingUserInput = true;
+                rl.prompt();
+            }
+        } finally {
+            /* // Deaktiviert: Dieser Fallback scheint Probleme zu verursachen.
+            if (isAwaitingUserInput === false && !currentError && !controller.signal.aborted) {
+                console.warn("[WARN] Processing finished unexpectedly. Forcing input availability.");
+                isAwaitingUserInput = true;
+                rl.resume();
+                rl.prompt();
+            }
+            */
+        }
+    });
+
+    // Handle SIGINT (Ctrl+C)
+    rl.on('SIGINT', () => {
+        console.log('\nAuf Wiedersehen! 👋');
+        rl.close();
+        process.exit(0);
+    });
+
+    // Handle Fehler
+    rl.on('error', (err) => {
+        console.error(`\n❌ Schwerwiegender Fehler: ${err.message}`);
+        rl.close();
+        process.exit(1);
+    });
+}
+
+// Starte das Programm
+main().catch(err => {
+    console.error(`\n❌ Unbehandelter Fehler: ${err.message}`);
+    process.exit(1);
+});
