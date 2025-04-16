@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// Lade Umgebungsvariablen
+// Load environment variables
 require('dotenv').config();
 
 const readline = require('readline');
@@ -8,21 +8,21 @@ const { query } = require('./src/query.js');
 const { createUserMessage, createAssistantMessage } = require('./src/utils/messages.js');
 
 /**
- * Zeigt den Willkommensbildschirm an.
+ * Displays the welcome screen.
  */
 function showWelcomeScreen() {
     console.log('\n=======================================================');
-    console.log('          🤖 Minimales Agentic System 🤖');
+    console.log('          🤖 Minimal Agentic System 🤖');
     console.log('=======================================================\n');
-    console.log('Willkommen! Dieses System ermöglicht es Claude, Dateien');
-    console.log('zu lesen, Verzeichnisse zu durchsuchen und mehr.\n');
-    console.log('Geben Sie Ihre Fragen ein oder "exit" zum Beenden.\n');
+    console.log('Welcome! This system enables Claude to read files,');
+    console.log('search directories and more.\n');
+    console.log('Enter your questions or "exit" to quit.\n');
     console.log('=======================================================\n');
 }
 
 /**
- * Erstellt eine readline-Schnittstelle für die Konsoleneingabe.
- * @returns {readline.Interface} - Die readline-Schnittstelle.
+ * Creates a readline interface for console input.
+ * @returns {readline.Interface} - The readline interface.
  */
 function createReadlineInterface() {
     return readline.createInterface({
@@ -34,47 +34,47 @@ function createReadlineInterface() {
 }
 
 /**
- * Startet die Hauptprogrammschleife.
+ * Starts the main program loop.
  */
 async function main() {
     showWelcomeScreen();
 
-    // Erstelle eine readline-Schnittstelle
+    // Create a readline interface
     const rl = createReadlineInterface();
 
-    // Verwalte den Konversationsverlauf
+    // Manage conversation history
     const messages = [];
 
-    // Systemanweisung für Claude
-    const systemPrompt = `Du bist ein hilfreicher Assistent mit Zugriff auf Werkzeuge.
-Wenn du eine Anfrage erhältst, die den Zugriff auf Dateien oder Verzeichnisse erfordert,
-nutze die dir zur Verfügung stehenden Werkzeuge, anstatt zu sagen, dass du keinen Zugriff hast.
-Verwende stets die passenden Werkzeuge für die jeweilige Aufgabe und erkläre deine Aktionen.`;
+    // System instruction for Claude
+    const systemPrompt = `You are a helpful assistant with access to tools.
+When you receive a request that requires access to files or directories,
+use the tools available to you instead of saying you don't have access.
+Always use the appropriate tools for each task and explain your actions.`;
 
-    // Abbruchsignal für langwierige Anfragen
+    // Abort signal for lengthy requests
     let controller = new AbortController();
     let signal = controller.signal;
     let isAwaitingUserInput = true;
 
-    // Hauptprogrammschleife
+    // Main program loop
     rl.prompt();
     rl.on('line', async (line) => {
         if (!isAwaitingUserInput) {
-            console.log("\n[INFO] Bitte warten Sie, bis die aktuelle Anfrage abgeschlossen ist.");
+            console.log("\n[INFO] Please wait until the current request is completed.");
             return;
         }
 
         const userInput = line.trim();
 
         if (userInput.toLowerCase() === 'exit') {
-            console.log('Auf Wiedersehen! 👋');
+            console.log('Goodbye! 👋');
             rl.close();
             process.exit(0);
             return;
         }
 
         if (userInput.toLowerCase() === 'stop') {
-            console.log('Breche die aktuelle Anfrage ab...');
+            console.log('Aborting current request...');
             controller.abort();
             controller = new AbortController();
             signal = controller.signal;
@@ -85,36 +85,36 @@ Verwende stets die passenden Werkzeuge für die jeweilige Aufgabe und erkläre d
         }
 
         try {
-            // Füge die Benutzernachricht zum Verlauf hinzu
+            // Add user message to history
             const userMessage = createUserMessage(userInput);
             messages.push(userMessage);
 
-            // Antwort generieren
+            // Generate response
             let assistantMessageContent = '';
             let lastEventType = '';
             let currentError = null;
             let finalContentProcessed = false;
             isAwaitingUserInput = false;
 
-            // Führe die Anfrage aus
+            // Execute the request
             for await (const event of query(messages, systemPrompt, signal)) {
                 switch (event.type) {
                     case 'status':
-                        // Zeige Status-Updates an
+                        // Show status updates
                         console.log(`\n[${event.message}]`);
                         
-                        // Wenn der Status "Ignoriere weitere Werkzeuganforderungen" beinhaltet, 
-                        // setze eine Formatierung, damit es auffälliger ist
-                        if (event.message.includes('Weitere Werkzeuganforderungen erkannt')) {
+                        // If the status includes "Ignore further tool requests", 
+                        // set formatting to make it more noticeable
+                        if (event.message.includes('Further tool requests detected')) {
                             console.log('\n----------------------------------------');
-                            console.log('⚠️  HINWEIS: Claude versucht erneut Werkzeuge zu verwenden.');
-                            console.log('    Diese Werkzeugaufrufe werden verarbeitet, um die Anfrage vollständig zu beantworten.');
+                            console.log('⚠️  NOTE: Claude is attempting to use tools again.');
+                            console.log('    These tool calls will be processed to complete the request.');
                             console.log('----------------------------------------\n');
                         }
                         break;
 
                     case 'content_block_delta':
-                        // Gib die Textantwort in Echtzeit aus
+                        // Output text response in real-time
                         if (event.data?.delta?.type === 'text_delta') {
                             const text = event.data.delta.text;
                             assistantMessageContent += text;
@@ -125,27 +125,27 @@ Verwende stets die passenden Werkzeuge für die jeweilige Aufgabe und erkläre d
 
                     case 'tool_executing':
                         if (lastEventType === 'text') {
-                            console.log('\n'); // Füge eine Leerzeile ein, wenn wir von Text zu Tool wechseln
+                            console.log('\n'); // Add a blank line when switching from text to tool
                         }
-                        console.log(`\n[Werkzeug wird verwendet] ${event.displayText}`);
+                        console.log(`\n[Tool being used] ${event.displayText}`);
                         lastEventType = 'tool';
                         break;
 
                     case 'tool_result':
-                        console.log(`\n[Werkzeugergebnis] ${event.displayText}`);
+                        console.log(`\n[Tool result] ${event.displayText}`);
                         lastEventType = 'tool_result';
                         break;
 
                     case 'error':
-                        console.error(`\n❌ Fehler: ${event.error.message || event.error}`);
+                        console.error(`\n❌ Error: ${event.error.message || event.error}`);
                         break;
                         
                     case 'final_assistant_response':
-                        // Dieser spezielle Event-Typ enthält die finale Textantwort von Claude nach Werkzeugausführung
-                        // Wir speichern sie direkt, damit sie nicht durch einen neuen Werkzeugaufruf überschrieben wird
+                        // This special event type contains Claude's final text response after tool execution
+                        // We save it directly so it's not overwritten by a new tool call
                         if (event.content) {
                             assistantMessageContent = event.content;
-                            process.stdout.write('\n' + event.content); // Gib die Antwort direkt aus
+                            process.stdout.write('\n' + event.content); // Output the response directly
                             lastEventType = 'text';
                         }
                         break;
@@ -174,49 +174,40 @@ Verwende stets die passenden Werkzeuge für die jeweilige Aufgabe und erkläre d
             }
 
             if (currentError && !controller.signal.aborted) {
-                console.log("\n[Runde wegen Stream-Fehler beendet]");
+                console.log("\n[Round ended due to stream error]");
                 rl.resume();
                 rl.prompt();
             }
         } catch (error) {
             if (error.name === 'AbortError') {
-                console.log('\n[Anfrage vom Benutzer abgebrochen]');
+                console.log('\n[Request aborted by user]');
             } else {
-                console.error(`\n❌ Externer Fehler: ${error.message}`);
+                console.error(`\n❌ External error: ${error.message}`);
                 console.error(error.stack);
                 rl.resume();
                 isAwaitingUserInput = true;
                 rl.prompt();
             }
-        } finally {
-            /* // Deaktiviert: Dieser Fallback scheint Probleme zu verursachen.
-            if (isAwaitingUserInput === false && !currentError && !controller.signal.aborted) {
-                console.warn("[WARN] Processing finished unexpectedly. Forcing input availability.");
-                isAwaitingUserInput = true;
-                rl.resume();
-                rl.prompt();
-            }
-            */
         }
     });
 
     // Handle SIGINT (Ctrl+C)
     rl.on('SIGINT', () => {
-        console.log('\nAuf Wiedersehen! 👋');
+        console.log('\nGoodbye! 👋');
         rl.close();
         process.exit(0);
     });
 
-    // Handle Fehler
+    // Handle errors
     rl.on('error', (err) => {
-        console.error(`\n❌ Schwerwiegender Fehler: ${err.message}`);
+        console.error(`\n❌ Fatal error: ${err.message}`);
         rl.close();
         process.exit(1);
     });
 }
 
-// Starte das Programm
+// Start the program
 main().catch(err => {
-    console.error(`\n❌ Unbehandelter Fehler: ${err.message}`);
+    console.error(`\n❌ Unhandled error: ${err.message}`);
     process.exit(1);
 });

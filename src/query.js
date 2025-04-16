@@ -9,36 +9,36 @@ const {
     createToolSignature
 } = require('./utils/messages.js');
 
-// Globaler Tool-Execution-Tracker
+// Global tool execution tracker
 const toolExecutionTracker = {
     executionCount: 0,
     recursionDepth: 0,
     toolIds: new Set(),
-    toolSignatures: new Set(), // Für inhaltlich ähnliche Werkzeugaufrufe
-    timeWindowedSignatures: new Map(), // Speichere Zeitstempel für Signaturen
-    contentBlockIds: new Set(), // Speichere bereits verarbeitete Content-Block-IDs
+    toolSignatures: new Set(), // For content-similar tool calls
+    timeWindowedSignatures: new Map(), // Store timestamps for signatures
+    contentBlockIds: new Set(), // Store already processed content block IDs
 
-    // Hilfsfunktion, um zu prüfen, ob ein Werkzeug bereits ausgeführt wurde
+    // Helper function to check if a tool has already been executed
     isDuplicate(toolUse) {
         if (!toolUse || !toolUse.id || !toolUse.name) return false;
 
-        // Prüfe auf exakte ID-Duplikate
+        // Check for exact ID duplicates
         if (this.toolIds.has(toolUse.id)) {
-            console.log(`[TRACKER] Werkzeug mit ID ${toolUse.id} bereits ausgeführt`);
+            console.log(`[TRACKER] Tool with ID ${toolUse.id} already executed`);
             return true;
         }
 
-        // Prüfe auf inhaltliche Duplikate (gleicher Name und gleiche Parameter)
+        // Check for content duplicates (same name and parameters)
         const signature = createToolSignature(toolUse.name, toolUse.input);
         if (this.toolSignatures.has(signature)) {
-            console.log(`[TRACKER] Werkzeug mit Signatur ${signature} bereits ausgeführt`);
+            console.log(`[TRACKER] Tool with signature ${signature} already executed`);
             return true;
         }
 
         return false;
     },
 
-    // Zeitfenster-basierte Duplikaterkennung
+    // Time window based duplicate detection
     isDuplicateWithTimeWindow(toolUse, windowMs = 60000) {
         if (!toolUse || !toolUse.name) return false;
 
@@ -48,17 +48,17 @@ const toolExecutionTracker = {
         if (this.timeWindowedSignatures.has(signature)) {
             const lastTime = this.timeWindowedSignatures.get(signature);
             if (now - lastTime < windowMs) {
-                console.log(`[TRACKER] Werkzeug mit Signatur ${signature} wurde in den letzten ${windowMs/1000} Sekunden ausgeführt`);
+                console.log(`[TRACKER] Tool with signature ${signature} was executed in the last ${windowMs/1000} seconds`);
                 return true;
             }
         }
 
-        // Aktualisiere den Zeitstempel
+        // Update the timestamp
         this.timeWindowedSignatures.set(signature, now);
         return false;
     },
 
-    // Hilfsfunktion, um ein neues Werkzeug als ausgeführt zu registrieren
+    // Helper function to register a new tool as executed
     trackExecution(toolUse) {
         if (!toolUse || !toolUse.id || !toolUse.name) return;
 
@@ -68,117 +68,117 @@ const toolExecutionTracker = {
         const signature = createToolSignature(toolUse.name, toolUse.input);
         this.toolSignatures.add(signature);
 
-        // Aktualisiere auch den Zeitstempel
+        // Also update the timestamp
         this.timeWindowedSignatures.set(signature, Date.now());
 
-        console.log(`[TRACKER] Werkzeug ${toolUse.name} (ID: ${toolUse.id}) registriert. Ausführung #${this.executionCount}`);
+        console.log(`[TRACKER] Tool ${toolUse.name} (ID: ${toolUse.id}) registered. Execution #${this.executionCount}`);
     },
 
-    // Zähler für Rekursionstiefe erhöhen
+    // Increase counter for recursion depth
     incrementRecursionDepth() {
         this.recursionDepth++;
-        console.log(`[TRACKER] Rekursionstiefe erhöht auf ${this.recursionDepth}`);
+        console.log(`[TRACKER] Recursion depth increased to ${this.recursionDepth}`);
         return this.recursionDepth;
     },
 
-    // Zähler für Rekursionstiefe zurücksetzen (am Ende des Aufrufs)
+    // Reset counter for recursion depth (at the end of the call)
     decrementRecursionDepth() {
         if (this.recursionDepth > 0) this.recursionDepth--;
-        console.log(`[TRACKER] Rekursionstiefe verringert auf ${this.recursionDepth}`);
+        console.log(`[TRACKER] Recursion depth decreased to ${this.recursionDepth}`);
         return this.recursionDepth;
     },
 
-    // Alle ausgeführten Tools protokollieren
+    // Log all executed tools
     logAllTrackedTools() {
-        console.log(`[TRACKER] Bisher verfolgte Tools (${this.executionCount}):`);
-        console.log(`[TRACKER] Tool-IDs: ${Array.from(this.toolIds).join(', ')}`);
-        console.log(`[TRACKER] Tool-Signaturen: ${Array.from(this.toolSignatures).join(', ')}`);
+        console.log(`[TRACKER] Tools tracked so far (${this.executionCount}):`);
+        console.log(`[TRACKER] Tool IDs: ${Array.from(this.toolIds).join(', ')}`);
+        console.log(`[TRACKER] Tool signatures: ${Array.from(this.toolSignatures).join(', ')}`);
     },
 
-    // Hilfsfunktion, um zu prüfen, ob ein Content-Block bereits verarbeitet wurde
+    // Helper function to check if a content block has already been processed
     isDuplicateContentBlock(contentBlockId) {
         if (!contentBlockId) return false;
 
         if (this.contentBlockIds.has(contentBlockId)) {
-            console.log(`[TRACKER] Content-Block mit ID ${contentBlockId} wurde bereits verarbeitet`);
+            console.log(`[TRACKER] Content block with ID ${contentBlockId} has already been processed`);
             return true;
         }
 
         this.contentBlockIds.add(contentBlockId);
         return false;
     },
-     // Bereinigt Tracker für einen neuen Top-Level-Aufruf
+     // Cleans tracker for a new top-level call
      resetForNewQuery() {
          this.executionCount = 0;
          this.recursionDepth = 0;
          this.toolIds.clear();
          this.toolSignatures.clear();
-         // timeWindowedSignatures nicht unbedingt löschen, kann über Anfragen hinweg nützlich sein
+         // timeWindowedSignatures not necessarily cleared, can be useful across queries
          this.contentBlockIds.clear();
-         console.log("[TRACKER] Tracker für neue Anfrage zurückgesetzt.");
+         console.log("[TRACKER] Tracker reset for new query.");
      }
 };
 
 /**
- * Der Haupt-Query-Generator, der eine Konversation mit Claude verarbeitet,
- * Werkzeuge ausführt und die Ergebnisse zurücksendet.
+ * The main query generator that processes a conversation with Claude,
+ * executes tools and returns the results.
  *
- * @param {Array} messages - Der Konversationsverlauf als Array von Nachrichtenobjekten.
- * @param {string} systemPrompt - Ein optionaler Systemprompt für Claude.
- * @param {AbortSignal} abortSignal - Ein Signal, um die Anfrage zu abzubrechen.
- * @param {readline.Interface} mainRl - Die Haupt-readline-Instanz aus index.js.
- * @yields {object} - Generiert verschiedene Ereignisobjekte während der Verarbeitung.
+ * @param {Array} messages - The conversation history as an array of message objects.
+ * @param {string} systemPrompt - An optional system prompt for Claude.
+ * @param {AbortSignal} abortSignal - A signal to abort the request.
+ * @param {readline.Interface} mainRl - The main readline instance from index.js.
+ * @yields {object} - Generates various event objects during processing.
  */
 async function* query(messages, systemPrompt = null, abortSignal = null, mainRl = null) {
-    // Tracker nur zurücksetzen, wenn es der erste Aufruf ist (Rekursionstiefe 0)
+    // Only reset tracker if it's the first call (recursion depth 0)
      if (toolExecutionTracker.recursionDepth === 0) {
          toolExecutionTracker.resetForNewQuery();
      }
 
     const currentRecursionDepth = toolExecutionTracker.incrementRecursionDepth();
-    // Abbruchbedingung für Rekursionstiefe
-     const MAX_RECURSION_DEPTH = 5; // Maximal erlaubte Rekursionstiefe
+    // Termination condition for recursion depth
+     const MAX_RECURSION_DEPTH = 5; // Maximum allowed recursion depth
      if (currentRecursionDepth > MAX_RECURSION_DEPTH) {
-         console.error(`❌ Maximale Rekursionstiefe (${MAX_RECURSION_DEPTH}) erreicht. Breche ab.`);
-         yield { type: 'error', error: new Error(`Maximale Rekursionstiefe (${MAX_RECURSION_DEPTH}) erreicht.`) };
+         console.error(`❌ Maximum recursion depth (${MAX_RECURSION_DEPTH}) reached. Aborting.`);
+         yield { type: 'error', error: new Error(`Maximum recursion depth (${MAX_RECURSION_DEPTH}) reached.`) };
          toolExecutionTracker.decrementRecursionDepth();
-         return; // Beende den Generator hier
+         return; // End the generator here
      }
 
     try {
-        // Hole Werkzeugdefinitionen
+        // Get tool definitions
         const toolDefinitions = getToolSchemas();
 
-        // Debugging-Information
-        console.log(`[DEBUG] query aufgerufen mit ${messages.length} Nachrichten, Rekursionstiefe: ${currentRecursionDepth}`);
+        // Debugging information
+        console.log(`[DEBUG] query called with ${messages.length} messages, recursion depth: ${currentRecursionDepth}`);
         // toolExecutionTracker.logAllTrackedTools();
 
-        // Sende Anfrage an Claude
-        yield { type: 'status', message: 'Sende Anfrage an Claude...' };
+        // Send request to Claude
+        yield { type: 'status', message: 'Sending request to Claude...' };
         const claudeStream = queryClaude(messages, toolDefinitions, systemPrompt, abortSignal);
 
-        // Verarbeite die Antwort von Claude
-        let toolUseRequests = []; // Sammelt gültige Tool-Anfragen
-        let assistantResponseText = ''; // Sammelt Text-Antworten
-        let currentToolInputJson = ''; // Sammelt JSON-Input für das aktuelle Tool
-        let currentToolUseId = null; // ID des aktuellen Tool-Blocks
-        let finalAssistantMessageStructure = null; // Speichert die Struktur der finalen Nachricht
+        // Process Claude's response
+        let toolUseRequests = []; // Collects valid tool requests
+        let assistantResponseText = ''; // Collects text responses
+        let currentToolInputJson = ''; // Collects JSON input for the current tool
+        let currentToolUseId = null; // ID of current tool block
+        let finalAssistantMessageStructure = null; // Stores the structure of the final message
 
-        let skippingDuplicateTool = false; // Flag, um Duplikat-Verarbeitung zu steuern
+        let skippingDuplicateTool = false; // Flag to control duplicate processing
 
         for await (const event of claudeStream) {
-             // Globale Fehlerbehandlung zuerst
+             // Global error handling first
              if (event.type === 'error') {
-                 console.error(`[STREAM ERROR] ${event.error?.message || 'Unbekannter Stream-Fehler'}`);
-                 yield event; // Fehler weitergeben
-                 continue; // Nächstes Event
+                 console.error(`[STREAM ERROR] ${event.error?.message || 'Unknown stream error'}`);
+                 yield event; // Pass error along
+                 continue; // Next event
              }
 
-            // Verhindere doppelte Verarbeitung desselben Content-Blocks
+            // Prevent double processing of the same content block
             if (event.type === 'content_block_start' && event.data.content_block?.id) {
                 const blockId = event.data.content_block.id;
                 if (toolExecutionTracker.contentBlockIds.has(blockId)) {
-                    console.log(`[DEBUG] Überspringe bereits verarbeiteten Content-Block: ${blockId}`);
+                    console.log(`[DEBUG] Skipping already processed content block: ${blockId}`);
                     continue;
                 }
                 toolExecutionTracker.contentBlockIds.add(blockId);
@@ -186,8 +186,8 @@ async function* query(messages, systemPrompt = null, abortSignal = null, mainRl 
 
             switch (event.type) {
                 case 'message_start':
-                     assistantResponseText = ''; // Zurücksetzen für neue Nachricht
-                     toolUseRequests = []; // Zurücksetzen für neue Nachricht
+                     assistantResponseText = ''; // Reset for new message
+                     toolUseRequests = []; // Reset for new message
                      finalAssistantMessageStructure = null;
                      break;
 
@@ -202,13 +202,13 @@ async function* query(messages, systemPrompt = null, abortSignal = null, mainRl 
                         currentToolInputJson = ''; // Reset JSON buffer
                         skippingDuplicateTool = false; // Reset flag
 
-                         // Prüfe auf Duplikat (ID oder Signatur im Zeitfenster)
+                         // Check for duplicate (ID or signature in time window)
                          if (toolExecutionTracker.isDuplicate(toolUse) || toolExecutionTracker.isDuplicateWithTimeWindow(toolUse)) {
-                             console.warn(`⚠️ Überspringe doppelte Werkzeuganforderung: ${toolUse.name} mit ID ${toolUse.id}`);
+                             console.warn(`⚠️ Skipping duplicate tool request: ${toolUse.name} with ID ${toolUse.id}`);
                              skippingDuplicateTool = true;
                              yield { type: 'skipped_duplicate_tool', toolUseId: toolUse.id, toolName: toolUse.name };
                          } else {
-                             // Gültige Anfrage - initial hinzufügen
+                             // Valid request - add initially
                              toolUseRequests.push(toolUse);
                          }
                     }
@@ -216,74 +216,72 @@ async function* query(messages, systemPrompt = null, abortSignal = null, mainRl 
 
                 case 'content_block_delta':
                     if (event.data.delta.type === 'text_delta') {
-                        // Text immer sammeln, egal ob Tool übersprungen wird oder nicht
+                        // Always collect text, whether tool is skipped or not
                         assistantResponseText += event.data.delta.text;
                     } else if (event.data.delta.type === 'input_json_delta' && currentToolUseId && !skippingDuplicateTool) {
-                         // JSON nur sammeln, wenn es KEIN Duplikat ist
+                         // Only collect JSON if it's NOT a duplicate
                          currentToolInputJson += event.data.delta.partial_json;
-                         // Versuch, Input im toolUseRequests Array zu aktualisieren
+                         // Try to update input in toolUseRequests array
                          try {
                               if (currentToolInputJson.trim().startsWith('{') && currentToolInputJson.trim().endsWith('}')) {
                                  const parsedInput = JSON.parse(currentToolInputJson);
                                  const requestToUpdate = toolUseRequests.find(req => req.id === currentToolUseId);
                                  if (requestToUpdate) {
-                                     requestToUpdate.input = parsedInput; // Aktualisiere Input
+                                     requestToUpdate.input = parsedInput; // Update input
                                  }
                               }
-                         } catch (e) { /* JSON noch unvollständig */ }
+                         } catch (e) { /* JSON still incomplete */ }
                      }
                     break;
 
                 case 'content_block_stop':
-                    // Wenn ein Block endet, relevante Zustände zurücksetzen
+                    // When a block ends, reset relevant states
                     currentToolUseId = null;
                     currentToolInputJson = '';
-                    skippingDuplicateTool = false; // Zurücksetzen für den nächsten Block
+                    skippingDuplicateTool = false; // Reset for next block
                     break;
 
                  case 'message_stop':
-                    // Die gesamte Antwort von Claude ist fertig
-                    // Speichere die finale Struktur (Text und gültige Tools)
+                    // Claude's entire response is complete
+                    // Save the final structure (text and valid tools)
                     finalAssistantMessageStructure = {
                         role: 'assistant',
-                        content: [{ type: 'text', text: assistantResponseText }], // Immer als Content-Block-Struktur
-                        tool_uses: toolUseRequests // Nur die gültigen Tool-Anfragen
+                        content: [{ type: 'text', text: assistantResponseText }], // Always as content block structure
+                        tool_uses: toolUseRequests // Only valid tool requests
                     };
                     yield { type: 'final_assistant_message_structure', structure: finalAssistantMessageStructure };
                     break;
             }
-        } // Ende for await claudeStream
+        } // End for await claudeStream
 
-        // --- Werkzeugausführung (nur wenn gültige Anfragen vorhanden) ---
+        // --- Tool execution (only if valid requests exist) ---
         if (toolUseRequests.length > 0) {
-             yield { type: 'status', message: `Führe ${toolUseRequests.length} Werkzeuge aus...` };
-             console.log(`[DEBUG] Vor Werkzeugausführung - Konversationshistorie: ${messages.length} Nachrichten`);
+             yield { type: 'status', message: `Executing ${toolUseRequests.length} tools...` };
+             console.log(`[DEBUG] Before tool execution - Conversation history: ${messages.length} messages`);
 
-            // Nachrichtenstruktur für den rekursiven Aufruf HIER vorbereiten
+            // Prepare message structure for recursive call HERE
             const updatedMessages = [...messages];
 
-            // Tracke die Ausführung erst jetzt
+            // Track execution only now
             toolUseRequests.forEach(req => toolExecutionTracker.trackExecution(req));
 
-            // Signal senden, dass wir möglicherweise auf Berechtigungen warten
+            // Signal that we may be waiting for permissions
             yield { type: 'awaiting_permissions' };
 
             const tasks = toolUseRequests.map(toolUse => {
                 const tool = findToolByName(toolUse.name);
                 return {
-                    // Stelle sicher, dass fn eine normale async function ist
-                    fn: async (params, context) => { // KEIN Sternchen (*)
-                        // Kein yield hier drin!
+                    fn: async (params, context) => { 
                         try {
                             if (!tool) {
-                                throw new Error(`Werkzeug "${toolUse.name}" nicht gefunden.`);
+                                throw new Error(`Tool "${toolUse.name}" not found.`);
                             }
-                            // Übergebe die *originale* requestPermission Funktion
-                            const result = await tool.call(params, { requestPermission }); // <- Originale Funktion
+                            // Pass the *original* requestPermission function
+                            const result = await tool.call(params, { requestPermission }); // <- Original function
                             return { toolUse, result, error: null };
                         } catch (error) {
-                            console.error(`Fehler bei der Ausführung von ${toolUse.name} (ID: ${toolUse.id}):`, error);
-                            return { toolUse, result: null, error: error.message || 'Unbekannter Fehler bei Werkzeugausführung' };
+                            console.error(`Error executing ${toolUse.name} (ID: ${toolUse.id}):`, error);
+                            return { toolUse, result: null, error: error.message || 'Unknown error during tool execution' };
                         }
                     },
                     isReadOnly: tool ? (tool.isReadOnly ? tool.isReadOnly() : true) : true,
@@ -292,16 +290,16 @@ async function* query(messages, systemPrompt = null, abortSignal = null, mainRl 
                 };
             });
 
-            // Gib die 'tool_executing' Events HIER aus, VOR dem Start der Tasks
+            // Output 'tool_executing' events HERE, BEFORE starting tasks
             for (const toolUse of toolUseRequests) {
                  let executionDisplayText = formatToolUseForDisplay(toolUse);
                  yield { type: 'tool_executing', toolUseId: toolUse.id, toolName: toolUse.name, displayText: executionDisplayText };
             }
 
-            // --- WICHTIG: Korrekte Nachrichtenstruktur für Rekursion --- 
+            // --- IMPORTANT: Correct message structure for recursion --- 
 
-            // 1. Füge EINE Assistenten-Nachricht mit ALLEN tool_use Blöcken hinzu
-            //    (Ignoriere den Text der vorherigen Antwort für diesen Schritt)
+            // 1. Add ONE assistant message with ALL tool_use blocks
+            //    (Ignore the text of the previous response for this step)
             if (toolUseRequests.length > 0) {
                 const toolUseContentBlocks = toolUseRequests.map(toolUse => ({
                     type: 'tool_use',
@@ -313,45 +311,30 @@ async function* query(messages, systemPrompt = null, abortSignal = null, mainRl 
                     role: 'assistant',
                     content: toolUseContentBlocks
                 });
-                console.log(`[DEBUG] Assistenten-Nachricht NUR mit ${toolUseContentBlocks.length} Tool-Use-Blöcken für Rekursion hinzugefügt.`);
+                console.log(`[DEBUG] Assistant message with ONLY ${toolUseContentBlocks.length} tool-use blocks added for recursion.`);
             }
-             
-            // (Der Code, der finalAssistantMessageStructure prüft und Text/Tool kombiniert, wird entfernt,
-            // da er nur für die finale Ausgabe, nicht für die Rekursion relevant war und Probleme verursachte)
-            /*  ENTFERNT:
-             if (finalAssistantMessageStructure) {
-                 const assistantContent = [];
-                 if (finalAssistantMessageStructure.content && finalAssistantMessageStructure.content[0]?.text) {
-                     assistantContent.push({ type: 'text', text: finalAssistantMessageStructure.content[0].text });
-                 }
-                 finalAssistantMessageStructure.tool_uses.forEach(tu => { ... });
-                 if (assistantContent.length > 0) {
-                    updatedMessages.push({ role: 'assistant', content: assistantContent });
-                 }
-             }
-            */
 
-            // 2. Führe Tasks aus und füge für jedes Ergebnis eine User-Nachricht hinzu
+            // 2. Execute tasks and add a user message for each result
             const toolResultsData = [];
             for await (const result of executeTasksOptimally(tasks, {}, 5)) { 
                 toolResultsData.push(result);
 
-                 // Formatieren und Ergebnis-Event ausgeben
+                 // Format and output result event
                  let resultValue;
                  let isError = !!result.error;
                  if (isError) {
-                     resultValue = `Fehler: ${result.error}`;
+                     resultValue = `Error: ${result.error}`;
                  } else if (typeof result.result === 'string') {
                      resultValue = result.result;
                  } else if (Array.isArray(result.result)) {
                      resultValue = result.result.join('\n');
                  } else if (result.result === undefined || result.result === null) {
-                     resultValue = "[Kein Ergebnis]";
+                     resultValue = "[No result]";
                  } else {
                      try {
                         resultValue = JSON.stringify(result.result, null, 2);
                      } catch (stringifyError) {
-                         resultValue = `[Fehler bei JSON.stringify: ${stringifyError.message}]`;
+                         resultValue = `[Error in JSON.stringify: ${stringifyError.message}]`;
                          isError = true;
                      }
                  }
@@ -359,49 +342,48 @@ async function* query(messages, systemPrompt = null, abortSignal = null, mainRl 
                  const displayText = formatToolResultForDisplay(result.toolUse, resultValue, isError);
                  yield { type: 'tool_result', toolUseId: result.toolUse.id, toolName: result.toolUse.name, isError, result: resultValue, displayText };
 
-                 // Füge die User-Nachricht mit dem Tool-Ergebnis hinzu
+                 // Add the user message with the tool result
                  updatedMessages.push(createToolResultMessage(
                      result.toolUse.id,
                      result.toolUse.name,
                      resultValue,
                      isError
                  ));
-                 console.log(`[DEBUG] Sende Werkzeugergebnis an Claude für ${result.toolUse.name}: ${isError ? 'ERROR' : 'SUCCESS'} (${resultValue.length} Zeichen)`);
+                 console.log(`[DEBUG] Sending tool result to Claude for ${result.toolUse.name}: ${isError ? 'ERROR' : 'SUCCESS'} (${resultValue.length} characters)`);
             }
 
-            // Signal senden, dass die Berechtigungsphase (und Tool-Ausführung) vorbei ist
+            // Signal that the permission phase (and tool execution) is over
             yield { type: 'permissions_resolved' };
 
-            yield { type: 'status', message: 'Sende Werkzeugergebnisse an Claude...' };
-            // Rekursiver Aufruf mit der korrigierten Nachrichtenstruktur
+            yield { type: 'status', message: 'Sending tool results to Claude...' };
             yield* query(updatedMessages, systemPrompt, abortSignal, mainRl);
 
         } else {
-            // Keine gültigen Tools angefordert
+            // No valid tools requested
              if (finalAssistantMessageStructure && finalAssistantMessageStructure.content && finalAssistantMessageStructure.content[0]?.text) {
-                 // Gib die finale Textantwort aus, wenn vorhanden
+                 // Output the final text response, if available
                  yield { type: 'final_assistant_response', content: finalAssistantMessageStructure.content[0].text };
              } else if (assistantResponseText.trim()) {
-                 // Fallback auf gesammelten Text, falls message_stop fehlte
+                 // Fallback to collected text if message_stop was missing
                   yield { type: 'final_assistant_response', content: assistantResponseText };
              } else {
-                  yield { type: 'status', message: '[Keine Textantwort von Claude erhalten]' };
+                  yield { type: 'status', message: '[No text response received from Claude]' };
              }
-             yield { type: 'status', message: 'Anfrage abgeschlossen.' };
+             yield { type: 'status', message: 'Request completed.' };
         }
 
     } catch (error) {
         if (error.name === 'AbortError') {
-            yield { type: 'status', message: 'Anfrage vom Benutzer abgebrochen.' };
+            yield { type: 'status', message: 'Request aborted by user.' };
         } else {
-             console.error(`❌ Fehler im query-Generator (Rekursion ${currentRecursionDepth}):`, error);
+             console.error(`❌ Error in query generator (recursion ${currentRecursionDepth}):`, error);
              yield { type: 'error', error };
         }
     } finally {
         toolExecutionTracker.decrementRecursionDepth();
-        // Prüfen, ob dies der Top-Level-Aufruf war
+        // Check if this was the top-level call
         if (toolExecutionTracker.recursionDepth === 0) {
-            console.log("[DEBUG] Top-Level query-Aufruf beendet. Sende turn_complete.");
+            console.log("[DEBUG] Top-level query call completed. Sending turn_complete.");
             yield { type: 'turn_complete' };
         }
     }

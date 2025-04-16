@@ -60,31 +60,31 @@ function createToolResultMessage(toolUseId, toolName, toolResult, isError = fals
 }
 
 /**
- * Erstellt einen Fingerabdruck für Werkzeugaufrufe zur Duplilkaterkennung.
- * @param {string} toolName - Der Name des Werkzeugs.
- * @param {object} toolInput - Die Eingabeparameter für das Werkzeug.
- * @returns {string} - Eine Signatur, die das Werkzeug und seine Parameter eindeutig identifiziert.
+ * Creates a fingerprint for tool calls to detect duplicates.
+ * @param {string} toolName - The name of the tool.
+ * @param {object} toolInput - The input parameters for the tool.
+ * @returns {string} - A signature that uniquely identifies the tool and its parameters.
  */
 function createToolSignature(toolName, toolInput) {
     if (!toolName) return "unknown:tool";
     
     try {
-        // Wenn input null oder undefined ist
+        // If input is null or undefined
         if (toolInput === null || toolInput === undefined) {
             return `${toolName}:empty-input`;
         }
         
-        // Für leere Objekte
+        // For empty objects
         if (typeof toolInput === 'object' && Object.keys(toolInput).length === 0) {
             return `${toolName}:empty-object`;
         }
         
-        // Normalisiere die Parameter, indem wir sie sortieren
+        // Normalize the parameters by sorting them
         let normalizedInput;
         
         if (typeof toolInput === 'object') {
             try {
-                // Sortiere die Schlüssel, um konsistente Signaturen zu erhalten
+                // Sort the keys to get consistent signatures
                 const sortedKeys = Object.keys(toolInput).sort();
                 normalizedInput = {};
                 
@@ -94,18 +94,18 @@ function createToolSignature(toolName, toolInput) {
                 
                 return `${toolName}:${JSON.stringify(normalizedInput)}`;
             } catch (innerError) {
-                console.warn(`Warnung: Fehler bei der Normalisierung der Tool-Parameter:`, innerError);
+                console.warn(`Warning: Error normalizing tool parameters:`, innerError);
                 return `${toolName}:object-normalization-failed`;
             }
         } else if (typeof toolInput === 'string') {
-            // Für String-Inputs
+            // For string inputs
             return `${toolName}:${toolInput}`;
         } else {
-            // Für andere primitive Typen
+            // For other primitive types
             return `${toolName}:${String(toolInput)}`;
         }
     } catch (e) {
-        console.warn(`Warnung: Kann keine Signatur für Werkzeug ${toolName} erstellen:`, e);
+        console.warn(`Warning: Cannot create signature for tool ${toolName}:`, e);
         return `${toolName}:signature-error-${typeof toolInput}`;
     }
 }
@@ -117,7 +117,7 @@ function createToolSignature(toolName, toolInput) {
  */
 function formatToolUseForDisplay(toolUse) {
   // Basic formatting, can be enhanced later
-  return `Werkzeuganforderung: ${toolUse.name}(${JSON.stringify(toolUse.input)})`;
+  return `Tool request: ${toolUse.name}(${JSON.stringify(toolUse.input)})`;
 }
 
 /**
@@ -128,7 +128,7 @@ function formatToolUseForDisplay(toolUse) {
  */
  function formatToolResultForDisplay(toolName, result) {
     // Basic formatting, can be enhanced later
-    return `Werkzeugergebnis [${toolName}]:\n${typeof result === 'string' ? result : JSON.stringify(result, null, 2)}`;
+    return `Tool result [${toolName}]:\n${typeof result === 'string' ? result : JSON.stringify(result, null, 2)}`;
   }
 
 

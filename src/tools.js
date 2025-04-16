@@ -1,34 +1,34 @@
 const fs = require('fs').promises;
 const path = require('path');
 
-// --- Tool Definitionen ---
+// --- Tool Definitions ---
 
 const viewFileTool = {
     name: "viewFile",
-    description: "Liest den Inhalt einer Datei im Arbeitsbereich. Gibt den Dateiinhalt als String zurück.",
+    description: "Reads the content of a file in the workspace. Returns the file content as a string.",
     input_schema: {
         type: "object",
         properties: {
             filePath: {
                 type: "string",
-                description: "Der relative Pfad zur Datei im Arbeitsbereich."
+                description: "The relative path to the file in the workspace."
             }
         },
         required: ["filePath"]
     },
-    isReadOnly: () => true, // Dieses Werkzeug ändert keinen Zustand
-    needsPermission: (params) => true, // Auch Lesen erfordert jetzt Berechtigung
+    isReadOnly: () => true, // This tool doesn't change any state
+    needsPermission: (params) => true, // Reading now also requires permission
     async call({ filePath }, { requestPermission }) {
-        // Sicherheitsüberprüfung: Stelle sicher, dass der Pfad relativ ist und nicht aus dem Arbeitsbereich hinausgeht
+        // Security check: Ensure the path is relative and doesn't go outside the workspace
         const absolutePath = path.resolve(process.cwd(), filePath);
         if (!absolutePath.startsWith(process.cwd())) {
-            throw new Error("Zugriff ausserhalb des Arbeitsbereichs ist nicht erlaubt.");
+            throw new Error("Access outside the workspace is not allowed.");
         }
 
-        // Berechtigungsprüfung
+        // Permission check
         const hasPerm = await requestPermission(this.name, { filePath });
         if (!hasPerm) {
-            return "Fehler: Keine Berechtigung zum Lesen der Datei.";
+            return "Error: No permission to read the file.";
         }
 
         try {
@@ -36,40 +36,40 @@ const viewFileTool = {
             return content;
         } catch (error) {
             if (error.code === 'ENOENT') {
-                 return `Fehler: Datei nicht gefunden unter ${filePath}`;
+                 return `Error: File not found at ${filePath}`;
              }
-             console.error(`Fehler beim Lesen der Datei ${filePath}:`, error);
-             // Wir geben einen Fehlerstring zurück, anstatt den Fehler zu werfen, damit Claude ihn verarbeiten kann
-             return `Fehler beim Lesen der Datei: ${error.message}`;
+             console.error(`Error reading file ${filePath}:`, error);
+             // We return an error string instead of throwing the error so Claude can process it
+             return `Error reading file: ${error.message}`;
         }
     }
 };
 
 const listDirectoryTool = {
     name: "listDirectory",
-    description: "Listet den Inhalt eines Verzeichnisses im Arbeitsbereich auf. Gibt eine Liste von Dateien und Unterverzeichnissen zurück.",
+    description: "Lists the contents of a directory in the workspace. Returns a list of files and subdirectories.",
     input_schema: {
         type: "object",
         properties: {
             dirPath: {
                 type: "string",
-                description: "Der relative Pfad zum Verzeichnis im Arbeitsbereich. './' für das Stammverzeichnis."
+                description: "The relative path to the directory in the workspace. './' for the root directory."
             }
         },
         required: ["dirPath"]
     },
     isReadOnly: () => true,
-    needsPermission: (params) => true, // Auch Verzeichnislisten erfordert jetzt Berechtigung
+    needsPermission: (params) => true, // Directory listing now also requires permission
     async call({ dirPath }, { requestPermission }) {
         const absolutePath = path.resolve(process.cwd(), dirPath);
         if (!absolutePath.startsWith(process.cwd())) {
-            throw new Error("Zugriff ausserhalb des Arbeitsbereichs ist nicht erlaubt.");
+            throw new Error("Access outside the workspace is not allowed.");
         }
 
-        // Berechtigungsprüfung
+        // Permission check
         const hasPerm = await requestPermission(this.name, { dirPath });
         if (!hasPerm) {
-            return "Fehler: Keine Berechtigung zum Auflisten des Verzeichnisses.";
+            return "Error: No permission to list the directory.";
         }
 
         try {
@@ -80,54 +80,54 @@ const listDirectoryTool = {
             return formattedEntries;
         } catch (error) {
              if (error.code === 'ENOENT') {
-                 return `Fehler: Verzeichnis nicht gefunden unter ${dirPath}`;
+                 return `Error: Directory not found at ${dirPath}`;
              }
-             console.error(`Fehler beim Auflisten des Verzeichnisses ${dirPath}:`, error);
-             return `Fehler beim Auflisten des Verzeichnisses: ${error.message}`;
+             console.error(`Error listing directory ${dirPath}:`, error);
+             return `Error listing directory: ${error.message}`;
         }
     }
 };
 
 const editFileTool = {
     name: "editFile",
-    description: "Bearbeitet eine Datei im Arbeitsbereich. Ersetzt den Inhalt der Datei durch den angegebenen Inhalt oder erstellt die Datei, wenn sie nicht existiert.",
+    description: "Edits a file in the workspace. Replaces the content of the file with the specified content or creates the file if it doesn't exist.",
     input_schema: {
         type: "object",
         properties: {
             filePath: {
                 type: "string",
-                description: "Der relative Pfad zur Datei im Arbeitsbereich."
+                description: "The relative path to the file in the workspace."
             },
             content: {
                 type: "string",
-                description: "Der neue Inhalt, der in die Datei geschrieben werden soll."
+                description: "The new content to be written to the file."
             }
         },
         required: ["filePath", "content"]
     },
-    isReadOnly: () => false, // Dieses Werkzeug ändert den Zustand
-    needsPermission: (params) => true, // Bearbeiten erfordert Berechtigung
+    isReadOnly: () => false, // This tool changes state
+    needsPermission: (params) => true, // Editing requires permission
     async call({ filePath, content }, { requestPermission }) {
-        // Sicherheitsüberprüfung
+        // Security check
         const absolutePath = path.resolve(process.cwd(), filePath);
         if (!absolutePath.startsWith(process.cwd())) {
-            throw new Error("Zugriff ausserhalb des Arbeitsbereichs ist nicht erlaubt.");
+            throw new Error("Access outside the workspace is not allowed.");
         }
 
-        // Berechtigungsprüfung (wird später implementiert)
+        // Permission check (will be implemented later)
         const hasPerm = await requestPermission(this.name, { filePath });
         if (!hasPerm) {
-            return "Fehler: Keine Berechtigung zum Bearbeiten der Datei.";
+            return "Error: No permission to edit the file.";
         }
 
         try {
-            // Stelle sicher, dass das Verzeichnis existiert
+            // Ensure the directory exists
             await fs.mkdir(path.dirname(absolutePath), { recursive: true });
             await fs.writeFile(absolutePath, content, 'utf-8');
-            return `Datei ${filePath} erfolgreich bearbeitet.`;
+            return `File ${filePath} successfully edited.`;
         } catch (error) {
-            console.error(`Fehler beim Schreiben der Datei ${filePath}:`, error);
-            return `Fehler beim Schreiben der Datei: ${error.message}`;
+            console.error(`Error writing to file ${filePath}:`, error);
+            return `Error writing to file: ${error.message}`;
         }
     }
 };
@@ -138,21 +138,21 @@ const availableTools = [
     viewFileTool,
     listDirectoryTool,
     editFileTool,
-    // Fügen Sie hier weitere Werkzeuge hinzu
+    // Add more tools here
 ];
 
 /**
- * Findet ein Werkzeug anhand seines Namens.
- * @param {string} toolName - Der Name des Werkzeugs.
- * @returns {object|undefined} - Das Werkzeugobjekt oder undefined, wenn nicht gefunden.
+ * Finds a tool by its name.
+ * @param {string} toolName - The name of the tool.
+ * @returns {object|undefined} - The tool object or undefined if not found.
  */
 function findToolByName(toolName) {
     return availableTools.find(tool => tool.name === toolName);
 }
 
 /**
- * Generiert die Werkzeugdefinitionen im von der Claude API erwarteten Format.
- * @returns {Array<object>} - Eine Liste von Werkzeugdefinitionen für die API.
+ * Generates the tool definitions in the format expected by the Claude API.
+ * @returns {Array<object>} - A list of tool definitions for the API.
  */
 function getToolSchemas() {
     return availableTools.map(tool => ({

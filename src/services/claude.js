@@ -7,16 +7,16 @@ const {
 } = require('../config');
 
 /**
- * Sendet eine Anfrage an die Claude API und gibt die Antwort als Async-Generator zurück.
- * @param {Array<object>} messages - Der Konversationsverlauf.
- * @param {Array<object>|null} tools - Die verfügbaren Werkzeuge.
- * @param {string|null} systemPrompt - Der Systemprompt.
- * @param {AbortSignal|null} abortSignal - Ein Signal zum Abbrechen der Anfrage.
- * @yields {object} - Chunks der API-Antwort (SSE-Events).
+ * Sends a request to the Claude API and returns the response as an Async-Generator.
+ * @param {Array<object>} messages - The conversation history.
+ * @param {Array<object>|null} tools - The available tools.
+ * @param {string|null} systemPrompt - The system prompt.
+ * @param {AbortSignal|null} abortSignal - A signal to abort the request.
+ * @yields {object} - Chunks of the API response (SSE events).
  */
 async function* queryClaude(messages, tools = null, systemPrompt = null, abortSignal = null) {
     if (!CLAUDE_API_KEY || CLAUDE_API_KEY === 'YOUR_API_KEY') {
-        throw new Error("Claude API Schlüssel nicht konfiguriert. Bitte setzen Sie ihn in src/config.js oder als Umgebungsvariable CLAUDE_API_KEY.");
+        throw new Error("Claude API key not configured. Please set it in src/config.js or as environment variable CLAUDE_API_KEY.");
     }
 
     const requestBody = {
@@ -52,10 +52,10 @@ async function* queryClaude(messages, tools = null, systemPrompt = null, abortSi
 
         if (!response.ok) {
             const errorBody = await response.text();
-            throw new Error(`Claude API Fehler: ${response.status} ${response.statusText} - ${errorBody}`);
+            throw new Error(`Claude API error: ${response.status} ${response.statusText} - ${errorBody}`);
         }
 
-        // Verarbeite den Stream von Server-Sent Events (SSE)
+        // Process the stream of Server-Sent Events (SSE)
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let buffer = '';
@@ -68,7 +68,7 @@ async function* queryClaude(messages, tools = null, systemPrompt = null, abortSi
 
             buffer += decoder.decode(value, { stream: true });
 
-            // Verarbeite vollständige SSE-Nachrichten im Puffer
+            // Process complete SSE messages in the buffer
             let boundary = buffer.indexOf('\n\n');
             while (boundary !== -1) {
                 const message = buffer.substring(0, boundary);
@@ -85,8 +85,8 @@ async function* queryClaude(messages, tools = null, systemPrompt = null, abortSi
                             const parsedData = JSON.parse(data);
                             yield { type: eventType, data: parsedData };
                         } catch (e) {
-                            console.error('Fehler beim Parsen der SSE-Daten:', data, e);
-                            // Ignoriere fehlerhafte JSON-Daten und fahre fort
+                            console.error('Error parsing SSE data:', data, e);
+                            // Ignore faulty JSON data and continue
                         }
                     }
                 }
@@ -94,20 +94,20 @@ async function* queryClaude(messages, tools = null, systemPrompt = null, abortSi
             }
         }
 
-        // Verarbeite verbleibende Daten im Puffer (sollte bei korrekten SSEs nicht vorkommen)
+        // Process remaining data in the buffer (should not occur with correct SSEs)
         if (buffer.trim()) {
-             console.warn('Verbleibende Daten im SSE-Puffer:', buffer);
-             // Optional: Versuche, die verbleibenden Daten zu parsen, wenn erwartet
+             console.warn('Remaining data in SSE buffer:', buffer);
+             // Optional: Try to parse the remaining data if expected
         }
 
     } catch (error) {
         if (error.name === 'AbortError') {
-            console.log('Claude API Anfrage abgebrochen.');
-            // Beende den Generator leise
+            console.log('Claude API request aborted.');
+            // Silently terminate the generator
             return;
         } else {
-            console.error("Fehler bei der Claude API Anfrage:", error);
-            // Werfe den Fehler weiter oder handle ihn spezifisch
+            console.error("Error in Claude API request:", error);
+            // Throw the error further or handle it specifically
             throw error;
         }
     }

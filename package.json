@@ -7,8 +7,8 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Juliane Hüttl (https://juliane-huettl.de)",
+  "license": "MIT",
   "description": "",
   "dependencies": {
     "dotenv": "^16.5.0",
