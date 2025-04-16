@@ -85,4 +85,59 @@ function createToolSignature(toolName, toolInput) {
         if (typeof toolInput === 'object') {
             try {
                 // Sortiere die Schlüssel, um konsistente Signaturen zu erhalten
-  
+                const sortedKeys = Object.keys(toolInput).sort();
+                normalizedInput = {};
+                
+                for (const key of sortedKeys) {
+                    normalizedInput[key] = toolInput[key];
+                }
+                
+                return `${toolName}:${JSON.stringify(normalizedInput)}`;
+            } catch (innerError) {
+                console.warn(`Warnung: Fehler bei der Normalisierung der Tool-Parameter:`, innerError);
+                return `${toolName}:object-normalization-failed`;
+            }
+        } else if (typeof toolInput === 'string') {
+            // Für String-Inputs
+            return `${toolName}:${toolInput}`;
+        } else {
+            // Für andere primitive Typen
+            return `${toolName}:${String(toolInput)}`;
+        }
+    } catch (e) {
+        console.warn(`Warnung: Kann keine Signatur für Werkzeug ${toolName} erstellen:`, e);
+        return `${toolName}:signature-error-${typeof toolInput}`;
+    }
+}
+
+/**
+ * Formats a tool use request for display to the user.
+ * @param {object} toolUse - The tool use object from the API response.
+ * @returns {string} - A formatted string representation for display.
+ */
+function formatToolUseForDisplay(toolUse) {
+  // Basic formatting, can be enhanced later
+  return `Werkzeuganforderung: ${toolUse.name}(${JSON.stringify(toolUse.input)})`;
+}
+
+/**
+ * Formats a tool result for display to the user.
+ * @param {string} toolName - The name of the tool.
+ * @param {any} result - The result from the tool.
+ * @returns {string} - A formatted string representation for display.
+ */
+ function formatToolResultForDisplay(toolName, result) {
+    // Basic formatting, can be enhanced later
+    return `Werkzeugergebnis [${toolName}]:\n${typeof result === 'string' ? result : JSON.stringify(result, null, 2)}`;
+  }
+
+
+module.exports = {
+  createUserMessage,
+  createAssistantMessage,
+  createToolUseMessage,
+  createToolResultMessage,
+  formatToolUseForDisplay,
+  formatToolResultForDisplay,
+  createToolSignature,
+};
