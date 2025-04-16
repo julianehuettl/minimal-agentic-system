@@ -12,3 +12,6 @@ yarn-error.log*
 # Ignoriere Betriebssystem-spezifische Dateien
 .DS_Store
 Thumbs.db 
+
+# Ignoriere lokale Dateien, die nicht im Repository sein sollen
+HäufigeFehler.md 
