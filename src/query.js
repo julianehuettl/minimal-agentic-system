@@ -34,7 +34,7 @@ const toolExecutionTracker = {
         
         // Check for exact ID duplicates
         if (this.toolIds.has(toolUse.id)) {
-            console.log(`[TRACKER] Tool with ID ${toolUse.id} already executed`);
+            // console.log(`[TRACKER] Tool with ID ${toolUse.id} already executed`);
             return true;
         }
         
@@ -50,7 +50,7 @@ const toolExecutionTracker = {
         const now = Date.now();
         const signature = createToolSignature(toolUse.name, toolUse.input || {});
         
-        console.log(`[TRACKER] Checking tool signature: ${signature}`);
+        // console.log(`[TRACKER] Checking tool signature: ${signature}`);
         
         if (this.timeWindowedSignatures.has(signature)) {
             const lastExecution = this.timeWindowedSignatures.get(signature);
@@ -59,12 +59,12 @@ const toolExecutionTracker = {
             // Check if the tool was executed recently in the same sequence
             if (timeDiff < windowMs && lastExecution.sequenceId === this.currentSequenceId) {
                 const params = JSON.stringify(toolUse.input || {});
-                console.log(`[TRACKER] Found recent execution:
+                /* console.log(`[TRACKER] Found recent execution:
                     - Tool: ${toolUse.name}
                     - Parameters: ${params}
                     - Time since last execution: ${timeDiff}ms
                     - Current sequence: ${this.currentSequenceId}
-                    - Last sequence: ${lastExecution.sequenceId}`);
+                    - Last sequence: ${lastExecution.sequenceId}`); */
                 return true;
             }
         }
@@ -97,28 +97,28 @@ const toolExecutionTracker = {
             this.sequenceToolCounts.set(this.currentSequenceId, currentCount + 1);
         }
         
-        console.log(`[TRACKER] Tool ${toolUse.name} (ID: ${toolUse.id}) registered. Execution #${this.executionCount}`);
+        // console.log(`[TRACKER] Tool ${toolUse.name} (ID: ${toolUse.id}) registered. Execution #${this.executionCount}`);
     },
 
     // Increase counter for recursion depth
     incrementRecursionDepth() {
         this.recursionDepth++;
-        console.log(`[TRACKER] Recursion depth increased to ${this.recursionDepth}`);
+        // console.log(`[TRACKER] Recursion depth increased to ${this.recursionDepth}`);
         return this.recursionDepth;
     },
 
     // Reset counter for recursion depth (at the end of the call)
     decrementRecursionDepth() {
         if (this.recursionDepth > 0) this.recursionDepth--;
-        console.log(`[TRACKER] Recursion depth decreased to ${this.recursionDepth}`);
+        // console.log(`[TRACKER] Recursion depth decreased to ${this.recursionDepth}`);
         return this.recursionDepth;
     },
 
     // Log all executed tools
     logAllTrackedTools() {
-        console.log(`[TRACKER] Tools tracked so far (${this.executionCount}):`);
+        /* console.log(`[TRACKER] Tools tracked so far (${this.executionCount}):`);
         console.log(`[TRACKER] Tool IDs: ${Array.from(this.toolIds).join(', ')}`);
-        console.log(`[TRACKER] Tool signatures: ${Array.from(this.toolSignatures).join(', ')}`);
+        console.log(`[TRACKER] Tool signatures: ${Array.from(this.toolSignatures).join(', ')}`); */
     },
 
     // Helper function to check if a content block has already been processed
@@ -126,7 +126,7 @@ const toolExecutionTracker = {
         if (!contentBlockId) return false;
 
         if (this.contentBlockIds.has(contentBlockId)) {
-            console.log(`[TRACKER] Content block with ID ${contentBlockId} has already been processed`);
+            // console.log(`[TRACKER] Content block with ID ${contentBlockId} has already been processed`);
             return true;
         }
 
@@ -148,7 +148,7 @@ const toolExecutionTracker = {
         this.currentSequenceId = Date.now().toString(36);
         this.sequenceToolCounts.clear();
         
-        console.log("[TRACKER] Tracker reset for new query with sequence ID:", this.currentSequenceId);
+        // console.log("[TRACKER] Tracker reset for new query with sequence ID:", this.currentSequenceId);
     }
 };
 
@@ -175,7 +175,7 @@ async function* query(messages, systemPrompt = null, abortSignal = null, mainRl 
         
         while (!isQueryComplete) {  // Continue until query is explicitly marked as complete
             // Send request to Claude
-            yield { type: 'status', message: 'Sending request to Claude...' };
+            // yield { type: 'status', message: 'Sending request to Claude...' }; // Removed this yield in favor of index.js filtering
             const claudeStream = queryClaude(messages, toolDefinitions, systemPrompt, abortSignal);
 
             // Process Claude's response
@@ -282,8 +282,6 @@ async function* query(messages, systemPrompt = null, abortSignal = null, mainRl 
             }
 
             // Process tool requests
-            let lastToolWasEditFile = false;
-            
             for (const toolUse of toolUseRequests) {
                 const tool = findToolByName(toolUse.name);
                 if (!tool) {
@@ -291,9 +289,21 @@ async function* query(messages, systemPrompt = null, abortSignal = null, mainRl 
                     continue;
                 }
 
+                let needsPerm = false;
                 try {
+                    // Check if permission is needed before calling the tool
+                    needsPerm = tool.needsPermission ? tool.needsPermission(toolUse.input) : false;
+                    
+                    if (needsPerm) {
+                        yield { type: 'awaiting_permissions' };
+                    }
+                    
                     // Execute the tool
                     const result = await tool.call(toolUse.input, { requestPermission });
+                    
+                    if (needsPerm) {
+                        yield { type: 'permissions_resolved' };
+                    }
                     
                     // Create tool result message
                     const toolResultMessage = createToolResultMessage(toolUse, result);
@@ -303,23 +313,16 @@ async function* query(messages, systemPrompt = null, abortSignal = null, mainRl 
                     
                     // Yield tool completion event
                     yield { type: 'tool_complete', result };
-                    
-                    // Track if this was an editFile tool (we'll signal end of turn but continue listening)
-                    if (toolUse.name === 'editFile' && result.includes('successfully')) {
-                        lastToolWasEditFile = true;
-                    }
                 } catch (error) {
                     console.error(`❌ Error executing tool ${toolUse.name}:`, error);
+                    // Ensure permissions_resolved is sent even if the tool call fails after permission was requested
+                    if (needsPerm) {
+                        yield { type: 'permissions_resolved' };
+                    }
                     yield { type: 'error', error };
                     isQueryComplete = true;
                     break;
                 }
-            }
-            
-            // If the last tool was editFile and it was successful, end this turn but keep the query alive
-            if (lastToolWasEditFile) {
-                yield { type: 'turn_complete' };
-                isQueryComplete = true;
             }
         }
         

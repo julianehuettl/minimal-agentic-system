@@ -29,7 +29,7 @@ function createReadlineInterface() {
         input: process.stdin,
         output: process.stdout,
         prompt: '> ',
-        terminal: true,
+        terminal: true,  // Enable terminal mode for proper input handling
     });
 }
 
@@ -49,7 +49,10 @@ async function main() {
     const systemPrompt = `You are a helpful assistant with access to tools.
 When you receive a request that requires access to files or directories,
 use the tools available to you instead of saying you don't have access.
-Always use the appropriate tools for each task and explain your actions.`;
+Always use the appropriate tools for each task and explain your actions.
+After successfully executing a tool, especially one that modifies files like 'editFile',
+provide a brief confirmation message and wait for the next user prompt.
+Avoid further actions or explanations unless specifically asked.`;
 
     // Abort signal for lengthy requests
     let controller = new AbortController();
@@ -61,6 +64,7 @@ Always use the appropriate tools for each task and explain your actions.`;
     
     // Handle user input
     const handleUserInput = async (line) => {
+        // console.log('[DEBUG] handleUserInput entered'); // Removed Debug
         if (!isAwaitingUserInput) {
             console.log("\n[INFO] Please wait until the current request is completed.");
             return;
@@ -97,13 +101,16 @@ Always use the appropriate tools for each task and explain your actions.`;
             let currentError = null;
             let finalContentProcessed = false;
             isAwaitingUserInput = false;
+            // console.log('[DEBUG] isAwaitingUserInput set to false'); // Removed Debug
 
             // Execute the request
             for await (const event of query(messages, systemPrompt, signal)) {
                 switch (event.type) {
                     case 'status':
-                        // Show status updates
-                        console.log(`\n[${event.message}]`);
+                        // Show status updates, but filter out the generic "Sending request..."
+                        if (event.message !== 'Sending request to Claude...') {
+                            console.log(`\n[${event.message}]`);
+                        }
                         
                         // If the status includes "Ignore further tool requests", 
                         // set formatting to make it more noticeable
@@ -116,11 +123,11 @@ Always use the appropriate tools for each task and explain your actions.`;
                         break;
 
                     case 'content_block_delta':
-                        // Output text response in real-time
+                        // Output text response in real-time ONLY
                         if (event.data?.delta?.type === 'text_delta') {
                             const text = event.data.delta.text;
-                            assistantMessageContent += text;
-                            process.stdout.write(text);
+                            // Only write to stdout, do not accumulate here
+                            process.stdout.write(text); 
                             lastEventType = 'text';
                         }
                         break;
@@ -140,14 +147,17 @@ Always use the appropriate tools for each task and explain your actions.`;
 
                     case 'error':
                         console.error(`\n❌ Error: ${event.error.message || event.error}`);
+                        // Store the error to check in turn_complete
+                        currentError = event.error; 
                         break;
                         
                     case 'final_assistant_response':
-                        // This special event type contains Claude's final text response after tool execution
-                        // We save it directly so it's not overwritten by a new tool call
+                        // This event contains the complete final text response.
+                        // Output it, store it, and mark it as processed.
                         if (event.content) {
-                            assistantMessageContent = event.content;
-                            process.stdout.write('\n' + event.content); // Output the response directly
+                            assistantMessageContent = event.content; // Store the final content
+                            process.stdout.write('\n' + event.content); // Output the final content
+                            finalContentProcessed = true; // Mark as processed
                             lastEventType = 'text';
                         }
                         break;
@@ -159,12 +169,23 @@ Always use the appropriate tools for each task and explain your actions.`;
                         rl.resume();
                         break;
                     case 'turn_complete':
-                        rl.resume();
+                        // Resume readline (might be paused due to permissions)
+                        rl.resume(); 
+                        
+                        // Add message to history ONLY if it wasn't processed via final_assistant_response
                         if (!currentError && assistantMessageContent.trim() && !finalContentProcessed) {
+                            // This case handles responses that didn't trigger 'final_assistant_response'
+                            // or if 'final_assistant_response' somehow didn't have content (unlikely).
+                            // We still need to create the message object.
                             const assistantMessage = createAssistantMessage(assistantMessageContent);
                             messages.push(assistantMessage);
-                            finalContentProcessed = true;
+                            // No need to set finalContentProcessed=true here, as it's already false
                         }
+                        
+                        // Reset state for next turn
+                        assistantMessageContent = ''; // Reset for next round
+                        currentError = null;
+                        finalContentProcessed = false; // Reset for next round
                         isAwaitingUserInput = true;
                         rl.prompt();
                         break;
