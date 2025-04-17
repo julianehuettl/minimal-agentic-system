@@ -39,74 +39,74 @@ function createToolUseMessage(toolUseId, toolName, toolInput) {
 
 /**
  * Creates a user message object representing the result of a tool execution.
- * @param {string} toolUseId - The ID of the corresponding tool use request.
- * @param {string} toolName - The name of the tool that was executed.
+ * @param {object} toolUse - The tool use object with id, name, and input.
  * @param {any} toolResult - The result returned by the tool execution.
  * @param {boolean} isError - Optional flag indicating if the result is an error.
  * @returns {object} - The user message object for the tool result.
  */
-function createToolResultMessage(toolUseId, toolName, toolResult, isError = false) {
+function createToolResultMessage(toolUse, toolResult, isError = false) {
+    // Ensure we have a valid toolUse object
+    if (!toolUse || !toolUse.id || !toolUse.name) {
+        console.error("Invalid tool use object provided to createToolResultMessage");
+        return {
+            role: 'user',
+            content: `Error: Unable to process tool result due to invalid tool use information`
+        };
+    }
+    
+    // Format tool result for Claude API (following the original format)
     return {
         role: 'user',
         content: [
             {
                 type: 'tool_result',
-                tool_use_id: toolUseId,
+                tool_use_id: toolUse.id,
                 content: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult),
-                is_error: isError, // Optional: Include if the tool execution resulted in an error
+                is_error: isError
             }
         ]
     };
 }
 
 /**
- * Creates a fingerprint for tool calls to detect duplicates.
- * @param {string} toolName - The name of the tool.
- * @param {object} toolInput - The input parameters for the tool.
- * @returns {string} - A signature that uniquely identifies the tool and its parameters.
+ * Creates a unique signature for a tool execution including parameters
+ * @param {string} toolName - Name of the tool
+ * @param {object} params - Tool parameters
+ * @returns {string} Unique signature for this tool execution
  */
-function createToolSignature(toolName, toolInput) {
+function createToolSignature(toolName, params = {}) {
     if (!toolName) return "unknown:tool";
     
     try {
-        // If input is null or undefined
-        if (toolInput === null || toolInput === undefined) {
-            return `${toolName}:empty-input`;
+        // Handle null or undefined params
+        if (params === null || params === undefined) {
+            return `${toolName}:no-params`;
         }
         
-        // For empty objects
-        if (typeof toolInput === 'object' && Object.keys(toolInput).length === 0) {
-            return `${toolName}:empty-object`;
-        }
+        // Ensure params is an object
+        const paramObj = typeof params === 'string' ? JSON.parse(params) : params;
         
-        // Normalize the parameters by sorting them
-        let normalizedInput;
+        // Create a stable string representation of parameters
+        const paramString = Object.entries(paramObj)
+            .filter(([_, value]) => value !== undefined && value !== null) // Filter out undefined and null values
+            .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+            .map(([key, value]) => {
+                const valueStr = typeof value === 'object' ? 
+                    JSON.stringify(value) : 
+                    String(value);
+                return `${key}:${valueStr}`;
+            })
+            .join('|');
         
-        if (typeof toolInput === 'object') {
-            try {
-                // Sort the keys to get consistent signatures
-                const sortedKeys = Object.keys(toolInput).sort();
-                normalizedInput = {};
-                
-                for (const key of sortedKeys) {
-                    normalizedInput[key] = toolInput[key];
-                }
-                
-                return `${toolName}:${JSON.stringify(normalizedInput)}`;
-            } catch (innerError) {
-                console.warn(`Warning: Error normalizing tool parameters:`, innerError);
-                return `${toolName}:object-normalization-failed`;
-            }
-        } else if (typeof toolInput === 'string') {
-            // For string inputs
-            return `${toolName}:${toolInput}`;
-        } else {
-            // For other primitive types
-            return `${toolName}:${String(toolInput)}`;
-        }
-    } catch (e) {
-        console.warn(`Warning: Cannot create signature for tool ${toolName}:`, e);
-        return `${toolName}:signature-error-${typeof toolInput}`;
+        // Log the parameter processing
+        console.log(`[DEBUG] Creating signature for ${toolName}:
+            Input params: ${JSON.stringify(params)}
+            Processed params: ${paramString}`);
+        
+        return `${toolName}:${paramString || 'empty-params'}`;
+    } catch (error) {
+        console.warn(`Warning: Error creating signature for tool ${toolName}:`, error);
+        return `${toolName}:signature-error`;
     }
 }
 

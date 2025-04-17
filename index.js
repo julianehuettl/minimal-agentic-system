@@ -58,7 +58,9 @@ Always use the appropriate tools for each task and explain your actions.`;
 
     // Main program loop
     rl.prompt();
-    rl.on('line', async (line) => {
+    
+    // Handle user input
+    const handleUserInput = async (line) => {
         if (!isAwaitingUserInput) {
             console.log("\n[INFO] Please wait until the current request is completed.");
             return;
@@ -151,21 +153,17 @@ Always use the appropriate tools for each task and explain your actions.`;
                         break;
 
                     case 'awaiting_permissions':
-                        console.log("[DEBUG] Pausing readline due to awaiting_permissions.");
                         rl.pause();
                         break;
                     case 'permissions_resolved':
-                        console.log("[DEBUG] Resuming readline due to permissions_resolved.");
                         rl.resume();
                         break;
                     case 'turn_complete':
-                        console.log("[DEBUG] Resuming readline and enabling input due to turn_complete.");
                         rl.resume();
                         if (!currentError && assistantMessageContent.trim() && !finalContentProcessed) {
                             const assistantMessage = createAssistantMessage(assistantMessageContent);
                             messages.push(assistantMessage);
                             finalContentProcessed = true;
-                            console.log("[DEBUG] Assistant message added to history (turn_complete fallback).");
                         }
                         isAwaitingUserInput = true;
                         rl.prompt();
@@ -176,6 +174,15 @@ Always use the appropriate tools for each task and explain your actions.`;
             if (currentError && !controller.signal.aborted) {
                 console.log("\n[Round ended due to stream error]");
                 rl.resume();
+                isAwaitingUserInput = true;
+                rl.prompt();
+            }
+            
+            // Ensure we prompt again even if something unexpected happens
+            if (!isAwaitingUserInput) {
+
+                isAwaitingUserInput = true;
+                rl.resume();
                 rl.prompt();
             }
         } catch (error) {
@@ -184,12 +191,16 @@ Always use the appropriate tools for each task and explain your actions.`;
             } else {
                 console.error(`\n❌ External error: ${error.message}`);
                 console.error(error.stack);
-                rl.resume();
-                isAwaitingUserInput = true;
-                rl.prompt();
             }
+            
+            rl.resume();
+            isAwaitingUserInput = true;
+            rl.prompt();
         }
-    });
+    };
+
+    // Register the line handler without letting it terminate the main function
+    rl.on('line', handleUserInput);
 
     // Handle SIGINT (Ctrl+C)
     rl.on('SIGINT', () => {
@@ -204,6 +215,9 @@ Always use the appropriate tools for each task and explain your actions.`;
         rl.close();
         process.exit(1);
     });
+    
+    // Keep the main function alive indefinitely with a never-resolving Promise
+    await new Promise(() => { /* This Promise never resolves */ });
 }
 
 // Start the program
